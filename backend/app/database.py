@@ -12,9 +12,24 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from app.config import settings
 
-# If using PostgreSQL with Supabase, ensure connect_args suitable for postgres
-connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(settings.DATABASE_URL, connect_args=connect_args)
+# If using PostgreSQL with Supabase, ensure connect_args suitable for postgres and PgBouncer pooler
+if settings.DATABASE_URL.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}
+    engine = create_engine(settings.DATABASE_URL, connect_args=connect_args)
+else:
+    # PostgreSQL (Supabase / Render)
+    # Ensure sslmode=require and disable prepared statements for PgBouncer / Transaction Pooler
+    pg_connect_args = {
+        "sslmode": "require",
+        "prepare_threshold": 0
+    }
+    engine = create_engine(
+        settings.DATABASE_URL,
+        connect_args=pg_connect_args,
+        pool_pre_ping=True,
+        pool_recycle=300
+    )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

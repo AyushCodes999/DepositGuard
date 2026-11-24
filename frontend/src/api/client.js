@@ -4,7 +4,10 @@
  * Run 2: Added GuardBot, Note Structuring, Comparison, Settlement, and PDF export endpoints.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+// Normalize API_BASE_URL to handle missing /api suffixes or trailing slashes cleanly
+const rawBase = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+const cleanBase = rawBase.replace(/\/+$/, "");
+const API_BASE_URL = cleanBase.endsWith("/api") ? cleanBase : `${cleanBase}/api`;
 
 function getHeaders() {
   const token = localStorage.getItem("depositguard_token");
@@ -26,10 +29,20 @@ async function request(endpoint, options = {}) {
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers
+    });
+  } catch (networkError) {
+    if (networkError.name === "TypeError" && (networkError.message.includes("fetch") || networkError.message.includes("network"))) {
+      throw new Error(
+        "Unable to connect to the DepositGuard API. The backend server on Render may be sleeping (free instances take ~50s to wake up on first request), or Vercel needs a redeploy with the correct VITE_API_URL. Please verify the backend status or wait 30 seconds."
+      );
+    }
+    throw networkError;
+  }
 
   if (!response.ok) {
     let errorDetail = "An unexpected error occurred.";

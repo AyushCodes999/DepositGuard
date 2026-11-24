@@ -27,34 +27,21 @@ def test_salted_password_hashing():
 
 
 def test_otp_flow_and_registration_enforcement(client):
-    test_email = "directuser@gmail.com"
+    test_email = "newuser@gmail.com"
 
-    # 1. Direct registration without OTP requirement succeeds with 201
-    r_direct = client.post("/api/auth/register", json={
+    # 1. Attempting to register without OTP verification must fail with 400
+    r_unverified = client.post("/api/auth/register", json={
         "email": test_email,
         "password": "password123",
-        "full_name": "Direct User",
+        "full_name": "New User",
         "role": "tenant"
     })
-    assert r_direct.status_code == 201
-    auth_data = r_direct.json()
-    assert "access_token" in auth_data
-    assert auth_data["user"]["email"] == test_email
+    assert r_unverified.status_code == 400
+    assert "verified" in r_unverified.json()["detail"].lower()
 
-    # 2. Duplicate registration attempt fails with 400
-    r_dup = client.post("/api/auth/register", json={
-        "email": test_email,
-        "password": "password123",
-        "full_name": "Duplicate User",
-        "role": "tenant"
-    })
-    assert r_dup.status_code == 400
-    assert "already exists" in r_dup.json()["detail"].lower()
-
-    # 3. OTP utility endpoints test (optional 6-digit flow)
-    otp_email = "otpuser@gmail.com"
+    # 2. Request OTP
     r_send = client.post("/api/auth/send-otp", json={
-        "email": otp_email,
+        "email": test_email,
         "purpose": "registration"
     })
     assert r_send.status_code == 200
@@ -64,23 +51,37 @@ def test_otp_flow_and_registration_enforcement(client):
     otp = data["dev_code"]
     assert len(otp) == 6
 
-    # 4. Submit wrong OTP - must fail and decrement remaining attempts
+    # 3. Submit wrong OTP - must fail and decrement remaining attempts
     r_wrong = client.post("/api/auth/verify-otp", json={
-        "email": otp_email,
+        "email": test_email,
         "otp": "000000"
     })
     assert r_wrong.status_code == 400
     assert "attempt" in r_wrong.json()["detail"].lower()
 
-    # 5. Submit correct OTP - succeeds and issues verification token
+    # 4. Submit correct OTP - succeeds and issues verification token
     r_verify = client.post("/api/auth/verify-otp", json={
-        "email": otp_email,
+        "email": test_email,
         "otp": otp
     })
     assert r_verify.status_code == 200
     ver_data = r_verify.json()
     assert ver_data["success"] is True
     assert ver_data["verification_token"] is not None
+    token = ver_data["verification_token"]
+
+    # 5. Complete registration using verification token
+    r_reg = client.post("/api/auth/register", json={
+        "email": test_email,
+        "password": "password123",
+        "full_name": "New User",
+        "role": "tenant",
+        "otp_token": token
+    })
+    assert r_reg.status_code == 201
+    auth_data = r_reg.json()
+    assert "access_token" in auth_data
+    assert auth_data["user"]["email"] == test_email
 
 
 def test_jwt_signature_enforcement(client):

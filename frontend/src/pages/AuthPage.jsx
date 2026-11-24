@@ -47,12 +47,35 @@ export default function AuthPage({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // 6-Digit Email OTP Verification State (Registration)
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpToken, setOtpToken] = useState("");
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [resendSeconds, setResendSeconds] = useState(0);
+  const [devCode, setDevCode] = useState(null);
+  const [otpNotice, setOtpNotice] = useState("");
+  const [otpError, setOtpError] = useState("");
+
   const { user, login, register } = useAuth();
   const isDay = theme === "day";
 
   useEffect(() => {
     setIsRegister(initialMode === "register");
+    handleResetEmail();
   }, [initialMode]);
+
+  useEffect(() => {
+    let timer;
+    if (resendSeconds > 0) {
+      timer = setInterval(() => {
+        setResendSeconds((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [resendSeconds]);
 
   useEffect(() => {
     if (user) {
@@ -60,15 +83,74 @@ export default function AuthPage({
     }
   }, [user, onNavigate]);
 
+  const handleSendOtp = async () => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !trimmedEmail.includes("@") || !trimmedEmail.includes(".")) {
+      setOtpError("Please enter a valid email address first.");
+      return;
+    }
+    setOtpError("");
+    setOtpNotice("");
+    setSendingOtp(true);
+    try {
+      const res = await api.sendOtp({ email: trimmedEmail, purpose: "registration" });
+      setOtpSent(true);
+      setResendSeconds(60);
+      if (res.dev_code) {
+        setDevCode(res.dev_code);
+      }
+      setOtpNotice(res.message || "A 6-digit security code has been sent to your email.");
+    } catch (err) {
+      setOtpError(err.message || "Failed to send verification code. Please try again.");
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    const cleanOtp = otpCode.trim();
+    if (cleanOtp.length !== 6) {
+      setOtpError("Please enter the complete 6-digit verification code.");
+      return;
+    }
+    setOtpError("");
+    setVerifyingOtp(true);
+    try {
+      const res = await api.verifyOtp({ email: email.trim(), otp: cleanOtp });
+      setOtpVerified(true);
+      setOtpToken(res.verification_token);
+      setOtpNotice("✓ Email verified successfully!");
+    } catch (err) {
+      setOtpError(err.message || "Invalid or expired verification code.");
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
+  const handleResetEmail = () => {
+    setOtpVerified(false);
+    setOtpSent(false);
+    setOtpToken("");
+    setOtpCode("");
+    setDevCode(null);
+    setOtpError("");
+    setOtpNotice("");
+  };
+
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     setError("");
+
+    if (isRegister && !otpVerified) {
+      setError("Email verification is mandatory. Please click 'Send Code' and enter the 6-digit OTP sent to your email.");
+      return;
+    }
 
     setLoading(true);
 
     try {
       if (isRegister) {
-        await register(email, password, fullName, role, phone);
+        await register(email, password, fullName, role, phone, otpToken);
       } else {
         await login(email, password);
       }
@@ -392,24 +474,156 @@ export default function AuthPage({
                 </div>
               )}
 
-              {/* Email Address */}
+              {/* Email Address with 6-Digit OTP Verification Gate */}
               <div>
                 <BoxReveal boxColor={isDay ? "#C2B29F" : "#047857"} duration={0.3}>
-                  <Label htmlFor="email" className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1.5">
-                    Email Address <span className="text-emerald-600">*</span>
-                  </Label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Label htmlFor="email" className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                      Email Address <span className="text-emerald-600">*</span>
+                    </Label>
+                    {isRegister && otpVerified && (
+                      <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Verified
+                      </span>
+                    )}
+                  </div>
                 </BoxReveal>
 
                 <BoxReveal width="100%" boxColor={isDay ? "#C2B29F" : "#047857"} duration={0.3}>
-                  <Input
-                    id="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                  />
+                  <div className="relative">
+                    <Input
+                      id="email"
+                      type="email"
+                      required
+                      disabled={isRegister && otpVerified}
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (otpSent || otpVerified) handleResetEmail();
+                      }}
+                      placeholder="you@example.com"
+                      className={isRegister && !otpVerified ? "pr-24" : ""}
+                    />
+                    {isRegister && !otpVerified && (
+                      <button
+                        type="button"
+                        onClick={handleSendOtp}
+                        disabled={sendingOtp || !email || !email.includes("@") || resendSeconds > 0}
+                        className={`absolute right-1.5 top-1.5 bottom-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                          isDay
+                            ? "bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs"
+                            : "bg-emerald-600 hover:bg-emerald-500 text-stone-950"
+                        }`}
+                      >
+                        {sendingOtp ? (
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                        ) : resendSeconds > 0 ? (
+                          <span>{resendSeconds}s</span>
+                        ) : (
+                          <span>{otpSent ? "Resend" : "Send OTP"}</span>
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </BoxReveal>
+
+                {/* OTP Verification Box (Registration mode) */}
+                {isRegister && otpSent && !otpVerified && (
+                  <div className={`mt-3 p-3.5 rounded-2xl border transition-all duration-300 space-y-3 ${
+                    isDay
+                      ? "bg-stone-50 border-stone-300 text-stone-900 shadow-xs"
+                      : "bg-stone-900/90 border-emerald-500/30 text-stone-100 backdrop-blur-md"
+                  }`}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold flex items-center gap-1.5 text-stone-800 dark:text-stone-200">
+                        <KeyRound className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        Enter 6-Digit Verification Code
+                      </span>
+                      {devCode && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOtpCode(devCode);
+                            setOtpError("");
+                          }}
+                          className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/25 transition cursor-pointer font-bold"
+                          title="Click to auto-fill code in dev mode"
+                        >
+                          Dev Code: <strong>{devCode}</strong> (Fill)
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        maxLength={6}
+                        pattern="[0-9]*"
+                        inputMode="numeric"
+                        value={otpCode}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 6);
+                          setOtpCode(val);
+                          if (val.length === 6) setOtpError("");
+                        }}
+                        placeholder="••••••"
+                        className={`w-full py-2 px-3 text-center tracking-[0.5em] font-mono font-bold text-base rounded-xl transition focus:outline-none ${
+                          isDay
+                            ? "bg-white border border-stone-300 text-stone-900 focus:border-emerald-600"
+                            : "bg-stone-950 border border-stone-700 text-stone-100 focus:border-emerald-400"
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleVerifyOtp}
+                        disabled={verifyingOtp || otpCode.trim().length !== 6}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm disabled:opacity-40 disabled:cursor-not-allowed ${
+                          isDay
+                            ? "bg-emerald-700 hover:bg-emerald-800 text-white shadow-emerald-900/10"
+                            : "bg-emerald-500 hover:bg-emerald-400 text-stone-950 shadow-emerald-950/20"
+                        }`}
+                      >
+                        {verifyingOtp ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        )}
+                        <span>Verify Code</span>
+                      </button>
+                    </div>
+
+                    {otpError && (
+                      <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{otpError}</span>
+                      </p>
+                    )}
+
+                    {otpNotice && !otpError && (
+                      <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 shrink-0" />
+                        <span>{otpNotice}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Email Verified Confirmation Badge */}
+                {isRegister && otpVerified && (
+                  <div className="mt-2.5 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700/60 text-emerald-800 dark:text-emerald-300 text-xs font-medium flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-semibold">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      Email Verified: {email}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleResetEmail}
+                      className="text-[11px] text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 underline cursor-pointer"
+                    >
+                      Change Email
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Password */}

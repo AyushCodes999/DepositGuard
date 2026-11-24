@@ -5,6 +5,7 @@ Run 2: Full AI Integration, GuardBot, Before/After Comparison, Settlements, and 
 """
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,11 +17,17 @@ from app.routers import (
     guardbot, comparison, settlements
 )
 
+logger = logging.getLogger("depositguard")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: initialize database tables and check GenAI availability non-blocking in background
-    init_db()
+    try:
+        init_db()
+        logger.info("Database schema initialized successfully.")
+    except Exception as e:
+        logger.error(f"Non-fatal warning: Database initialization during startup encountered an error: {e}")
     asyncio.create_task(asyncio.to_thread(check_models_availability))
     yield
 
@@ -36,7 +43,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_origin_regex=r"^https://.*\.vercel\.app$",
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
