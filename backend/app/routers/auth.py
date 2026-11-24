@@ -224,14 +224,26 @@ def verify_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
 def register(req: UserRegisterRequest, db: Session = Depends(get_db)):
     """
     Registers a new tenant or landlord.
-    Guarantees security: Requires verified email ownership via 6-digit OTP for new accounts.
-    If the account already exists, signs them in immediately.
+    Email OTP verification is removed - registration succeeds directly with email and password.
+    If the account already exists, updates password and returns active session.
     """
     email_clean = req.email.lower()
 
-    # 1. If email already exists, return active session immediately
+    # 1. If email already exists, update credentials and return active session immediately
     existing = db.query(ProfileModel).filter(ProfileModel.email == email_clean).first()
     if existing:
+        if req.password:
+            existing.password_hash = hash_password(req.password)
+        if req.full_name:
+            existing.full_name = req.full_name.strip()
+        if req.role:
+            existing.role = req.role
+        if req.phone:
+            existing.phone = req.phone.strip()
+        existing.email_verified = True
+        db.commit()
+        db.refresh(existing)
+
         token = create_access_token(user_id=existing.id, email=existing.email, role=existing.role)
         return AuthTokenResponse(
             access_token=token,
@@ -246,40 +258,12 @@ def register(req: UserRegisterRequest, db: Session = Depends(get_db)):
             )
         )
 
-    # 2. Enforce OTP Verification for new registrations
-    is_test_env = (
-        email_clean.endswith("@example.com") or
-        settings.ENVIRONMENT == "test"
-    )
-
-    is_verified = is_test_env
-    if not is_verified:
-        now = datetime.now(timezone.utc)
-        fifteen_mins_ago = now - timedelta(minutes=15)
-
-        if req.otp_token and verify_otp_token(req.otp_token, email_clean):
-            is_verified = True
-        else:
-            verified_db_otp = db.query(EmailOtpModel).filter(
-                EmailOtpModel.email == email_clean,
-                EmailOtpModel.verified == True,
-                EmailOtpModel.created_at >= fifteen_mins_ago
-            ).first()
-            if verified_db_otp:
-                is_verified = True
-
-    if not is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email address has not been verified. Please request and verify a 6-digit OTP code before registering."
-        )
-
-    # 3. Create profile with salted PBKDF2 hash
+    # 2. Create new profile directly with salted PBKDF2 hash without requiring OTP
     user_id = str(uuid.uuid4())
     new_profile = ProfileModel(
         id=user_id,
         email=email_clean,
-        password_hash=hash_password(req.password or "demo1234"),
+        password_hash=hash_password(req.password or "password123"),
         full_name=req.full_name.strip() if req.full_name else email_clean.split("@")[0].title(),
         phone=req.phone.strip() if req.phone else None,
         role=req.role or "landlord",
@@ -307,22 +291,35 @@ def register(req: UserRegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=AuthTokenResponse)
 def login(req: UserLoginRequest, db: Session = Depends(get_db)):
-    """Authenticates user with auto-provisioning to eliminate login failures."""
+    """Authenticates user with email and password."""
     email_clean = req.email.lower()
     profile = db.query(ProfileModel).filter(ProfileModel.email == email_clean).first()
 
-    if not profile:
+    # Auto-provision demo account if demo email is used
+    if not profile and email_clean == "thewayitgoes123456789@gmail.com":
         profile = ProfileModel(
             id=str(uuid.uuid4()),
             email=email_clean,
-            full_name=email_clean.split("@")[0].title(),
-            password_hash=hash_password(req.password or "demo1234"),
-            role="landlord" if "landlord" in email_clean else "tenant",
+            full_name="Demo User",
+            password_hash=hash_password(req.password or "password123"),
+            role="landlord",
             email_verified=True
         )
         db.add(profile)
         db.commit()
         db.refresh(profile)
+
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No account found with this email. Please register first."
+        )
+
+    if not verify_password(req.password, profile.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password. Please verify your credentials."
+        )
 
     token = create_access_token(user_id=profile.id, email=profile.email, role=profile.role)
 

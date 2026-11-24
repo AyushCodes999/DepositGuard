@@ -16,10 +16,12 @@ function AppContent() {
 
   const getInitialPage = () => {
     const path = window.location.pathname;
-    if (path.startsWith("/dashboard") || path === "/login" || path === "/auth") return "dashboard";
-    if (path.startsWith("/inspections")) return "inspection";
-    if (path.startsWith("/comparison")) return "comparison";
-    if (path.startsWith("/settlement")) return "settlement";
+    const hasToken = localStorage.getItem("depositguard_token");
+    if (path === "/login" || path === "/auth") return "auth";
+    if (path.startsWith("/dashboard")) return hasToken ? "dashboard" : "auth";
+    if (path.startsWith("/inspections")) return hasToken ? "inspection" : "auth";
+    if (path.startsWith("/comparison")) return hasToken ? "comparison" : "auth";
+    if (path.startsWith("/settlement")) return hasToken ? "settlement" : "auth";
     return "landing";
   };
 
@@ -77,9 +79,10 @@ function AppContent() {
   }, []);
 
   const navigateTo = (page, options = {}) => {
-    // Auth barriers removed: redirect any auth requests directly to dashboard
-    if (page === "auth" || page === "login") {
-      page = "dashboard";
+    const hasToken = localStorage.getItem("depositguard_token");
+    const protectedPages = ["dashboard", "inspection", "comparison", "settlement"];
+    if (protectedPages.includes(page) && !hasToken) {
+      page = "auth";
     }
     if (options.initialRole) {
       setAuthRole(options.initialRole);
@@ -179,7 +182,7 @@ function AppContent() {
       )}
 
       {/* Global Navbar shown on authenticated / interior pages */}
-      {currentPage !== "landing" && (
+      {currentPage !== "landing" && currentPage !== "auth" && (
         <div className="relative z-20">
           <Navbar
             onNavigate={navigateTo}

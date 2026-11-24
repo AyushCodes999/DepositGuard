@@ -3,99 +3,117 @@ import { api } from "../api/client";
 
 const AuthContext = createContext(null);
 
-export const DEFAULT_USER = {
-  id: "07c9fbf4-8d4a-4d3a-a36e-5ea11f3111bc",
-  email: "ayushrajchandelarc@gmail.com",
-  full_name: "Aayush Raj",
-  role: "landlord",
-  phone: "+91 98765 43210"
-};
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
       const saved = localStorage.getItem("depositguard_user");
-      return saved ? JSON.parse(saved) : DEFAULT_USER;
+      return saved ? JSON.parse(saved) : null;
     } catch {
-      return DEFAULT_USER;
+      return null;
     }
   });
 
-  const [token, setToken] = useState(() => localStorage.getItem("depositguard_token") || "demo_token");
+  const [token, setToken] = useState(() => {
+    try {
+      return localStorage.getItem("depositguard_token") || null;
+    } catch {
+      return null;
+    }
+  });
+
   const [loading, setLoading] = useState(false);
 
-  // Keep localStorage continuously primed so user is never empty
+  // Sync profile details with backend on initial load if token exists
   useEffect(() => {
-    try {
-      localStorage.setItem("depositguard_user", JSON.stringify(user || DEFAULT_USER));
-      if (!localStorage.getItem("depositguard_token")) {
-        localStorage.setItem("depositguard_token", "demo_token");
-      }
-    } catch {}
-  }, [user]);
-
-  // Sync profile details with backend
-  useEffect(() => {
-    api.getMe()
-      .then((userData) => {
-        if (userData && userData.id) {
-          setUser(userData);
-          try {
-            localStorage.setItem("depositguard_user", JSON.stringify(userData));
-          } catch {}
-        }
-      })
-      .catch(() => {
-        // Fall back gracefully to DEFAULT_USER without interrupting navigation
-      });
-  }, []);
+    if (token) {
+      api.getMe()
+        .then((userData) => {
+          if (userData && userData.id) {
+            setUser(userData);
+            try {
+              localStorage.setItem("depositguard_user", JSON.stringify(userData));
+            } catch {}
+          }
+        })
+        .catch(() => {
+          // If token expired or invalid, reset user and token
+          localStorage.removeItem("depositguard_token");
+          localStorage.removeItem("depositguard_user");
+          setUser(null);
+          setToken(null);
+        });
+    }
+  }, [token]);
 
   const switchRole = (desiredRole) => {
-    setUser((prev) => {
-      const currentRole = prev?.role || "landlord";
-      const nextRole = desiredRole || (currentRole === "landlord" ? "tenant" : "landlord");
-      const updated = {
-        ...(prev || DEFAULT_USER),
-        role: nextRole
-      };
-      try {
-        localStorage.setItem("depositguard_user", JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
+    if (!user) return;
+    const currentRole = user.role || "landlord";
+    const nextRole = desiredRole || (currentRole === "landlord" ? "tenant" : "landlord");
+    const updated = { ...user, role: nextRole };
+    setUser(updated);
+    try {
+      localStorage.setItem("depositguard_user", JSON.stringify(updated));
+    } catch {}
   };
 
   const login = async (email, password) => {
+    setLoading(true);
     try {
       const data = await api.login({ email, password });
-      if (data?.user) {
+      if (data?.access_token && data?.user) {
+        localStorage.setItem("depositguard_token", data.access_token);
+        localStorage.setItem("depositguard_user", JSON.stringify(data.user));
+        setToken(data.access_token);
         setUser(data.user);
         return data.user;
       }
-    } catch {}
-    return user || DEFAULT_USER;
+      throw new Error("Login failed. No token received.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const register = async () => {
-    return user || DEFAULT_USER;
+  const register = async (email, password, fullName, role, phone) => {
+    setLoading(true);
+    try {
+      const data = await api.register({
+        email,
+        password,
+        full_name: fullName,
+        role: role || "tenant",
+        phone: phone || undefined
+      });
+      if (data?.access_token && data?.user) {
+        localStorage.setItem("depositguard_token", data.access_token);
+        localStorage.setItem("depositguard_user", JSON.stringify(data.user));
+        setToken(data.access_token);
+        setUser(data.user);
+        return data.user;
+      }
+      throw new Error("Registration failed. No token received.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const logout = () => {
-    // In auth-free mode, reset to DEFAULT_USER rather than locking the user out
-    setUser(DEFAULT_USER);
+    localStorage.removeItem("depositguard_token");
+    localStorage.removeItem("depositguard_user");
+    setUser(null);
+    setToken(null);
   };
 
   return (
     <AuthContext.Provider
       value={{
-        user: user || DEFAULT_USER,
-        token: token || "demo_token",
+        user,
+        token,
         role: user?.role || "landlord",
         login,
         register,
         logout,
         switchRole,
-        loading: false
+        loading
       }}
     >
       {children}
