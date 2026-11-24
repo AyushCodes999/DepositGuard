@@ -71,3 +71,11 @@ dist-ssr/
 # OS
 .DS_Store
 Thumbs.db
+
+# Presentations & Internal College Reports
+*.pptx
+PPT_CONTENT_GUIDE.md
+PRE_DEPLOY_REPORT.md
+generate_all_23_slides.py
+jecrc_logo_exact.png
+
