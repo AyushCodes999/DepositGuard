@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <defs>
+    <linearGradient id="dg-fav-shield" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981" />
+      <stop offset="60%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <radialGradient id="dg-fav-glow" cx="50%" cy="30%" r="60%">
+      <stop offset="0%" stop-color="#6EE7B7" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#10B981" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Outer Heraldic Shield with Subtle Glow -->
+  <path
+    d="M 24 3.5 C 33.5 3.5, 42 6.5, 43 14 C 44 26.5, 36.5 38.5, 24 44.5 C 11.5 38.5, 4 26.5, 5 14 C 6 6.5, 14.5 3.5, 24 3.5 Z"
+    fill="url(#dg-fav-shield)"
+    stroke="#34D399"
+    stroke-width="1.4"
+  />
+  <path
+    d="M 24 3.5 C 33.5 3.5, 42 6.5, 43 14 C 44 26.5, 36.5 38.5, 24 44.5 C 11.5 38.5, 4 26.5, 5 14 C 6 6.5, 14.5 3.5, 24 3.5 Z"
+    fill="url(#dg-fav-glow)"
+  />
+
+  <!-- Traditional Stepped Roof & Kalasa Finial -->
+  <circle cx="24" cy="8.2" r="1.1" fill="#FEF08A" />
+  <path d="M 24 7.2 L 24 9.5" stroke="#FEF08A" stroke-width="0.8" stroke-linecap="round" />
+  <path d="M 20.5 11 L 27.5 11 L 29 13 L 19 13 Z" fill="#D1FAE5" />
+  <path d="M 16 14.5 L 32 14.5 L 34 16.5 L 14 16.5 Z" fill="#A7F3D0" />
+
+  <!-- Rajasthani Cusped Jharokha Gateway Portal -->
+  <path
+    d="M 16 35.5 L 16 23 C 16 19, 19.5 17.5, 21.5 19 C 22.5 17.8, 24 17, 24 17 C 24 17, 25.5 17.8, 26.5 19 C 28.5 17.5, 32 19, 32 23 L 32 35.5 C 29.5 37.5, 26.5 38.5, 24 38.8 C 21.5 38.5, 18.5 37.5, 16 35.5 Z"
+    fill="#022C22"
+    stroke="#6EE7B7"
+    stroke-width="1.2"
+  />
+
+  <!-- Jharokha Corbel Side Brackets -->
+  <path d="M 13.5 18 L 16 20.5 L 16 18 Z" fill="#34D399" />
+  <path d="M 34.5 18 L 32 20.5 L 32 18 Z" fill="#34D399" />
+
+  <!-- Secure Tamper-Evident Lock Inside Portal -->
+  <!-- Shackle -->
+  <path
+    d="M 21.5 25.5 C 21.5 23.2, 26.5 23.2, 26.5 25.5 L 26.5 27.2 L 21.5 27.2 Z"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="1.6"
+    stroke-linecap="round"
+  />
+  <!-- Lock Body -->
+  <rect x="20" y="27" width="8" height="6.5" rx="1.6" fill="#FFFFFF" />
+  <!-- Keyhole -->
+  <circle cx="24" cy="29.3" r="1.1" fill="#022C22" />
+  <path d="M 23.4 29.8 L 24.6 29.8 L 24.3 32 L 23.7 32 Z" fill="#022C22" />
+</svg>

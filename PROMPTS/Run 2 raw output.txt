@@ -1,0 +1,258 @@
+Ran check if google-genai is installed in venv · Exited with code 1
+Ran install google-genai and reportlab in venv
+Checked task Install google-genai and reportlab in venv
+Checked task Install google-genai and reportlab in venv
+Checked task Install google-genai and reportlab in venv
+Checked task Install google-genai and reportlab in venv
+Checked task Install google-genai and reportlab in venv
+Checked task Install google-genai and reportlab in venv
+Checked task Install google-genai and reportlab in venv
+Ran verify genai import
+Edited requirements.txt
+Analyzed database.py:L80-160
+Analyzed database.py:L161-178
+Created migration_run2.sql
+Edited database.py
+Edited schemas.py
+Edited ai_service.py
+Edited pdf_service.py
+Edited guardbot.py
+Edited comparison.py
+Created settlements.py
+Analyzed inspections.py:L110-165
+Edited inspections.py
+Edited main.py
+Created test_guardbot_validation.py
+Created test_structured_output_fallback.py
+Ran run all 4 unit tests
+Edited client.js
+Edited GuardBotWidget.jsx
+Edited ComparisonPage.jsx
+Edited SettlementPage.jsx
+Edited DashboardPage.jsx
+Analyzed App.jsx:L15-75
+Edited App.jsx
+Analyzed InspectionDetailPage.jsx:L200-260
+Analyzed InspectionDetailPage.jsx:L275-300
+Analyzed InspectionDetailPage.jsx:L400-470
+Edited InspectionDetailPage.jsx
+Ran build frontend with Run 2 pages
+Ran run full pytest suite
+Analyzed .env.example:L1-23
+Analyzed .env.example:L1-9
+Ran check git status
+Edited README.md
+
+### 1. Short List of Existing Run 1 Files Touched & Why
+
+1. [backend/requirements.txt](file:///c:/MY_Works/DepositGuard/backend/requirements.txt): Added official `google-genai>=1.0.0`, `reportlab>=4.0.0`, and `pillow>=9.0.0` for AI and PDF generation.
+2. [backend/app/database.py](file:///c:/MY_Works/DepositGuard/backend/app/database.py): Added `AIComparisonModel` (stores advisory item triage separately from locked records) and mapped `SettlementModel` relationships.
+3. [backend/app/models/schemas.py](file:///c:/MY_Works/DepositGuard/backend/app/models/schemas.py): Added Pydantic schemas for GuardBot (`GuardBotChatRequest`, `GuardBotChatResponse`), note structuring (`NoteStructureRequest`, `NoteStructureResponse`), comparison triage (`ComparisonResponse`, `ComparisonItemResponse`), and settlements (`SettlementCreate`, `SettlementUpdate`, `SettlementResponse`).
+4. [backend/app/routers/inspections.py](file:///c:/MY_Works/DepositGuard/backend/app/routers/inspections.py): Fixed the UX bug by blocking duplicate active Move-In inspections, added Move-Out inspection cloning from the locked Move-In baseline, and added the direct `GET /{inspection_id}/export-pdf` route.
+5. [backend/app/main.py](file:///c:/MY_Works/DepositGuard/backend/app/main.py): Registered the `settlements.router`, wired active `guardbot.router` and `comparison.router`, and added the startup `check_models_availability()` check.
+6. [frontend/src/api/client.js](file:///c:/MY_Works/DepositGuard/frontend/src/api/client.js): Added client methods for GuardBot chat, note structuring, before/after comparison, settlements, and PDF download with structured error code capture.
+7. [frontend/src/pages/DashboardPage.jsx](file:///c:/MY_Works/DepositGuard/frontend/src/pages/DashboardPage.jsx): Implemented the duplicate Move-In guard (disables button and guides both parties to the shared inspection), added the "+ Initiate Move-Out Inspection" button, and added quick action links.
+8. [frontend/src/pages/InspectionDetailPage.jsx](file:///c:/MY_Works/DepositGuard/frontend/src/pages/InspectionDetailPage.jsx): Added the inline `✨ AI Structure (Fast)` button powered by `gemini-3.5-flash-lite`, and added direct PDF download and comparison links when locked.
+9. [frontend/src/App.jsx](file:///c:/MY_Works/DepositGuard/frontend/src/App.jsx): Wired the active `ComparisonPage`, `SettlementPage`, and live `GuardBotWidget` with property state passing.
+
+---
+
+### 2. Backend Implementation
+
+#### A. Database Migration for AI Comparisons
+File: [supabase/migration_run2.sql](file:///c:/MY_Works/DepositGuard/supabase/migration_run2.sql)
+
+```sql
+create table if not exists public.ai_comparisons (
+    id uuid default gen_random_uuid() primary key,
+    inspection_id uuid references public.inspections(id) on delete cascade not null,
+    move_in_item_id uuid references public.room_items(id) on delete set null,
+    move_out_item_id uuid references public.room_items(id) on delete set null,
+    item_name text not null,
+    room_name text not null,
+    change_type text not null check (change_type in ('none', 'normal_wear', 'possible_damage', 'unclear')),
+    confidence numeric(4, 3) not null default 0.0,
+    rationale text not null default '',
+    ai_status text not null default 'success' check (ai_status in ('success', 'failed')),
+    model_used text not null default 'gemini-3.8-flash',
+    created_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.ai_comparisons enable row level security;
+
+create policy "Members can view ai comparisons" on public.ai_comparisons
+    for select using (
+        exists (
+            select 1 from public.inspections i
+            join public.property_members pm on pm.property_id = i.property_id
+            where i.id = ai_comparisons.inspection_id and pm.user_id = auth.uid()
+        )
+    );
+
+create policy "Backend can insert ai comparisons" on public.ai_comparisons
+    for insert with check (
+        exists (
+            select 1 from public.inspections i
+            join public.property_members pm on pm.property_id = i.property_id
+            where i.id = ai_comparisons.inspection_id and pm.user_id = auth.uid()
+        )
+    );
+```
+
+#### B. Gemini AI Service (Official SDK `google-genai`)
+File: [backend/app/services/ai_service.py](file:///c:/MY_Works/DepositGuard/backend/app/services/ai_service.py)
+
+- Uses `gemini-3.8-flash` (`GEMINI_MODEL_REASONING`) for GuardBot and before/after comparison.
+- Uses `gemini-3.5-flash-lite` (`GEMINI_MODEL_FAST`) for note-to-JSON structuring.
+- Grounded strictly in `RESEARCH NOTES/Research notes.txt` rules and Model Tenancy Act (MTA 2021) 2nd Schedule repair allocations.
+- Pre-model validation (length 2-1000, letters check, mash rejection), per-user rate limit (20 req/min), 20s timeout, 1 retry with backoff on 429/503, and error codes (`invalid_input`, `rate_limited`, `timeout`, `upstream_unavailable`).
+- Logs error code and latency only; never logs message content.
+
+#### C. GuardBot Router
+File: [backend/app/routers/guardbot.py](file:///c:/MY_Works/DepositGuard/backend/app/routers/guardbot.py)
+
+- `POST /api/guardbot/chat`: Authenticated, non-streaming, with structured error mapping.
+- `POST /api/guardbot/structure-note`: Fast note-to-JSON structuring with 1 retry and fallback to raw notes on second failure (`ai_status="failed"`).
+
+#### D. Before/After AI Comparison Router
+File: [backend/app/routers/comparison.py](file:///c:/MY_Works/DepositGuard/backend/app/routers/comparison.py)
+
+- `POST /api/comparison/{move_out_inspection_id}`: Runs AI condition comparison against the **locked move-in record**. Caps photos at maximum 4 images per comparison. Saves results in `ai_comparisons` as advisory suggestions (never part of the locked hash; no liability or deduction amounts).
+- `GET /api/comparison/{inspection_id}`: Fetches stored advisory comparison items.
+
+#### E. Settlement & ReportLab PDF Export
+Files: 
+- [backend/app/routers/settlements.py](file:///c:/MY_Works/DepositGuard/backend/app/routers/settlements.py)
+- [backend/app/services/pdf_service.py](file:///c:/MY_Works/DepositGuard/backend/app/services/pdf_service.py)
+
+- ReportLab engine embeds:
+  - Cryptographic canonical SHA-256 seal and lock timestamp.
+  - Dual tenant & landlord approvals.
+  - Room-by-room items with conditions and notes.
+  - Append-only cryptographic amendment ledger.
+  - Settlement summary with itemized deduction claims.
+  - Clearly labeled AI suggestions ("Advisory Only — AI Suggestion").
+  - Prominent legal disclaimer: *"tamper-evident, not tamper-proof; documentation, not legal advice"*.
+
+---
+
+### 3. Frontend Implementation
+
+#### A. GuardBot Floating Keyboard-Accessible Widget
+File: [frontend/src/components/GuardBotWidget.jsx](file:///c:/MY_Works/DepositGuard/frontend/src/components/GuardBotWidget.jsx)
+
+- Keyboard-accessible with `role="dialog"`, focus trap on input, `aria-live="polite"` for replies, and Escape key dismissal.
+- Client validation and server error state rendering:
+  - `invalid_input`: Clean UI message with prompt guidance.
+  - `rate_limited`: Warning of 20 req/min limit.
+  - `timeout`: Clean 20s timeout alert.
+  - `upstream_unavailable`: Offline service alert.
+- Preserves user text on failure and provides a **"Retry Prompt"** button.
+- Includes quick-prompt chips grounded in research notes (faded paint rules, meter readings, MTA repair allocations).
+
+#### B. Before & After Comparison Page
+File: [frontend/src/pages/ComparisonPage.jsx](file:///c:/MY_Works/DepositGuard/frontend/src/pages/ComparisonPage.jsx)
+
+- Side-by-side room item comparison: **Locked Move-In Baseline** vs **Move-Out Walkthrough**.
+- One-click **"Run AI Condition Comparison"** calling `gemini-3.8-flash`.
+- Displays advisory badges: `No Noticeable Change` (Green), `Normal Wear & Tear` (Blue), `Possible Chargeable Damage` (Amber), and `Unclear / Manual Review` (Slate), with confidence scores and one-sentence rationales.
+
+#### C. Settlement & PDF Export Page
+File: [frontend/src/pages/SettlementPage.jsx](file:///c:/MY_Works/DepositGuard/frontend/src/pages/SettlementPage.jsx)
+
+- Security deposit amount tracker, itemized deduction claims builder, and wear-and-tear dispute toggles.
+- Financial metrics: Original Deposit, Total Deductions, and Net Refund to Tenant.
+- Agreement controls (Agreed, Disputed, Draft) and one-click **"Export Tamper-Evident PDF"**.
+
+#### D. UX Bug Fix in Dashboard & Routing Wiring
+Files:
+- [frontend/src/pages/DashboardPage.jsx](file:///c:/MY_Works/DepositGuard/frontend/src/pages/DashboardPage.jsx)
+- [frontend/src/App.jsx](file:///c:/MY_Works/DepositGuard/frontend/src/App.jsx)
+
+- Blocks duplicate Move-In checklist creation; shows `"✓ Move-In Active"` with a banner guiding both parties to collaborate on the shared inspection.
+- Unlocks `"+ Initiate Move-Out Inspection"` once Move-In is locked.
+- Connects direct navigation to Comparison and Settlement pages.
+
+---
+
+### 4. Updated Environment Configuration & Local Run Commands
+
+#### Backend: [backend/.env.example](file:///c:/MY_Works/DepositGuard/backend/.env.example)
+```env
+APP_NAME=DepositGuard
+ENVIRONMENT=development
+DEBUG=True
+
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_JWT_SECRET=your-supabase-jwt-secret-min32bytes
+
+DATABASE_URL=sqlite:///./depositguard.db
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
+
+# Google Gen AI SDK (Official SDK)
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL_REASONING=gemini-3.8-flash
+GEMINI_MODEL_FAST=gemini-3.5-flash-lite
+```
+
+#### Frontend: [frontend/.env.example](file:///c:/MY_Works/DepositGuard/frontend/.env.example)
+```env
+VITE_API_URL=http://localhost:8000/api
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
+#### Local Run Commands
+```powershell
+# 1. Run All Backend Unit Tests (Run 1 & Run 2)
+cd backend
+..\backend\.venv\Scripts\python -m pytest -v
+
+# 2. Start Backend Server
+..\backend\.venv\Scripts\python -m uvicorn app.main:app --reload --port 8000
+
+# 3. Start Frontend Client (in a separate terminal)
+cd frontend
+npm run dev
+```
+
+---
+
+### 5. Verification Checklist
+
+#### Automated Unit Tests (All 6 Passing)
+```
+backend/tests/test_guardbot_validation.py::test_guardbot_input_validation PASSED
+backend/tests/test_guardbot_validation.py::test_guardbot_rate_limiting PASSED
+backend/tests/test_hash_determinism.py::test_canonical_hash_determinism PASSED
+backend/tests/test_post_lock_immutability.py::test_post_lock_immutability PASSED
+backend/tests/test_structured_output_fallback.py::test_structured_output_success PASSED
+backend/tests/test_structured_output_fallback.py::test_structured_output_retry_and_fallback PASSED
+```
+
+#### Interactive Verification Steps
+1. **Duplicate Move-In Bug Fix**:
+   - Open `http://localhost:5173`, register/log in, and create a Move-In inspection.
+   - Observe that the button immediately disables with `"✓ Move-In Active"`.
+   - The info banner directs both parties to the shared inspection. Any attempt to POST a duplicate move-in returns HTTP 400 with the exact guidance message.
+2. **AI Note Structuring (`gemini-3.5-flash-lite`)**:
+   - In any room item, enter rough notes like: `"paint faded under window, two minor nail marks"`.
+   - Click **"✨ AI Structure (Fast)"**; observe the condition update to `"Normal Wear & Tear"` and the notes formatted cleanly.
+3. **Live GuardBot (`gemini-3.8-flash`)**:
+   - Open GuardBot in the bottom right corner.
+   - Ask: *"Can my landlord deduct ₹25,000 for full repaint if there are only small picture nail holes?"*
+   - Verify GuardBot cites Model Tenancy Act rules explaining that minor nail holes and ordinary fading are normal wear and tear.
+   - Test pre-model validation by sending `"asdfghjkl asdfghjkl"`; verify the **INVALID_INPUT** error UI renders without an API call, preserving your text and offering **Retry**.
+4. **Before/After AI Comparison & Advisory Triage**:
+   - Approve the Move-In record as both tenant and landlord to lock it.
+   - Click **"+ Initiate Move-Out Inspection"**, then open **"🔍 AI Comparison"**.
+   - Click **"Run AI Condition Comparison"**; verify items receive change categories, confidence scores, and rationales labeled as **Advisory Only**.
+5. **Settlement & PDF Export**:
+   - Navigate to **"📄 Settlement & PDF"**, enter deposit details and proposed deduction items.
+   - Click **"Export Tamper-Evident PDF"** to generate and download the ReportLab PDF complete with the cryptographic SHA-256 seal.
+6. **Simulating an API Timeout**:
+   - In [backend/app/services/ai_service.py](file:///c:/MY_Works/DepositGuard/backend/app/services/ai_service.py), temporarily set `API_TIMEOUT_SECONDS = 0.001`.
+   - Send any question in GuardBot.
+   - Observe that GuardBot catches the timeout, logs `code=timeout` and latency in ms (never message content), and the UI displays a clean **TIMEOUT** alert preserving your input with a **Retry** button. Revert `API_TIMEOUT_SECONDS = 20.0` when finished.

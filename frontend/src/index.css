@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: hsl(0, 0%, 100%);
+    --foreground: hsl(0, 0%, 0%);
+    --skeleton: hsl(0, 0%, 90%);
+    --border: hsl(220, 20%, 90%);
+    --btn-border: hsl(214deg, 31.8%, 91.4%);
+    --input: hsl(220, 20%, 90%);
+    
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: hsl(222, 94%, 5%);
+    --foreground: hsl(0, 0%, 100%);
+    --skeleton: hsl(218, 36%, 16%);
+    --border: hsl(220, 20%, 90%);
+    --btn-border: hsl(217deg, 32.6%, 17.5%);
+    --input: hsl(219, 63%, 16%);
+    
+    --radius: 0.5rem;
+  }
+
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  }
+}
+
+@layer components {
+  .g-button {
+    border-radius: var(--radius);
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--btn-border);
+  }
+}
+
+/* =========================================================================
+   ULTRA-CRISP BRAND LOGO & ROYAL HERITAGE ANIMATION SYSTEM
+   Zero-blur, GPU-isolated, subpixel-aligned rendering on Retina/High-DPI displays
+   ========================================================================= */
+
+.dg-logo-img {
+  image-rendering: auto;
+  image-rendering: smooth;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Ambient Heritage Halo Glow (isolated to background layer, never touches logo pixels) */
+@keyframes logo-halo-pulse {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.96) translate3d(0, 0, 0);
+  }
+  50% {
+    opacity: 0.82;
+    transform: scale(1.06) translate3d(0, 0, 0);
+  }
+}
+
+.animate-logo-halo {
+  animation: logo-halo-pulse 4.8s ease-in-out infinite;
+}
+
+/* Royal Heritage Specular Sunbeam Sweep */
+@keyframes logo-sheen-sweep {
+  0% {
+    transform: translateX(-180%) skewX(-24deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.70;
+  }
+  26% {
+    transform: translateX(280%) skewX(-24deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(280%) skewX(-24deg);
+    opacity: 0;
+  }
+}
+
+.animate-logo-sheen {
+  animation: logo-sheen-sweep 5.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Fast responsive hover gleam */
+@keyframes logo-hover-gleam {
+  0% {
+    transform: translateX(-180%) skewX(-24deg);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(280%) skewX(-24deg);
+    opacity: 0;
+  }
+}
+
+.group:hover .group-hover-sheen {
+  animation: logo-hover-gleam 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}

@@ -1,0 +1,45 @@
+Run 1: foundation, auth, and the lock
+
+---
+1. Role:
+Act as a senior full-stack engineer and security-minded UI/UX architect specializing in React (Vite), Tailwind CSS, Python FastAPI, and Supabase (Postgres, Auth, Storage, RLS).
+
+2. Task:
+Build RUN 1 of 2 of "DepositGuard", a rental deposit protection MVP for the Indian market: project scaffolding, database, auth, photo storage, and the dual-confirmation lock with amendments. NO AI features, chatbot, or PDF in this run (Run 2 adds them).
+
+3. Context:
+Tenants often lose deposits to undocumented pre-existing damage. DepositGuard gives landlord and tenant a neutral, timestamped record. It is documentation, NOT legal advice or enforcement. The record is "tamper-evident, not tamper-proof" (use that wording in the UI). Assumptions (state them back in 5 lines, then proceed without asking): landlord creates a property and invites the tenant by email/invite code; one landlord and one tenant per property.
+
+4. Constraints:
+STACK
+- Frontend: React (Vite) + Tailwind, mobile-first, with loading/empty/error states on every page.
+- Backend: FastAPI, Pydantic v2, routers per domain. CORS origins from env (localhost + deployed frontend URL). Frontend targets Vercel; backend targets a long-running host (Render/Railway).
+- Reserve config for Run 2: add GEMINI_API_KEY, GEMINI_MODEL_REASONING, GEMINI_MODEL_FAST to .env.example only. Do not write AI code. Never change or "correct" any model ID found in this prompt or in env files.
+
+AUTH & ROLES
+- Supabase Auth. Store role (tenant|landlord) in a `profiles` table set server-side at registration. Never trust user-editable metadata for authorization.
+- FastAPI verifies the Supabase JWT on every non-public route and authorizes by property membership, not just role.
+- RLS on all tables. The service-role key lives only in backend env, never in the frontend.
+
+STORAGE
+- Private bucket; signed URLs with short TTL; jpeg/png/webp only, max 8 MB, client-side compression before upload.
+- Path: {property_id}/{inspection_id}/{room_id}/{uuid}.ext. At upload, compute and store a server-side SHA-256 of the photo bytes and a server timestamp. Ignore client timestamps.
+
+DUAL-CONFIRMATION LOCK
+- State machine: draft -> pending_approval -> locked | disputed. Any edit while pending resets approvals to draft. Either party can reject with a reason (-> disputed, then back to draft).
+- On the second approval, in ONE Postgres transaction with a row lock: build the canonical payload (inspection fields, rooms, items, notes, per-photo SHA-256 hashes, approver ids, schema_version); serialize as canonical JSON (sorted keys, UTF-8, no extra whitespace); compute SHA-256; store hash + server timestamp; set status=locked.
+- DB triggers reject UPDATE/DELETE on locked inspections and their rooms/items/photos.
+- GET /inspections/{id}/verify recomputes the hash and reports match/mismatch. Show the hash in the UI.
+- Amendments: append-only table with author, reason, changed fields, timestamp, prev_hash (chains to the lock hash or previous amendment), and required acknowledgment from the other party. Never mutate the locked record.
+
+SCOPE
+- Focused MVP, no enterprise boilerplate. Include 2 tests: hash determinism and post-lock immutability.
+
+5. Output Format:
+Complete files, no pseudocode, in this order:
+1. The 5-line assumptions summary.
+2. Directory structure (frontend + backend), leaving clearly named empty places for Run 2 (ai service, guardbot router, pdf service, comparison page).
+3. Supabase SQL: tables (profiles, properties, property_members, inspections, rooms, room_items, photos, approvals, amendments, settlements), RLS policies, immutability triggers, lock transaction/RPC.
+4. FastAPI backend: auth middleware, property/inspection/photo/approval/amendment/verify routers.
+5. React pages: Landing, Login/Register, Dashboard, Property & Move-In Inspection (with lock + amendment flow).
+6. `.env.example` for both apps and local run commands, plus a "how to verify Run 1 works" checklist.

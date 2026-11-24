@@ -1,0 +1,41 @@
+Here is my v1 prompt:
+
+---
+1. Role:
+Act as a senior full-stack web developer and UI/UX architect specializing in React, Tailwind CSS, Python FastAPI, Supabase, and Google Gemini API integration.
+
+2. Task:
+Build the working foundation of "DepositGuard", a rental deposit protection web application where tenants and landlords digitally document a property's move-in and move-out condition with room-wise photos and notes, lock mutually approved move-in records against tampering, compare before-and-after conditions with AI assistance, export PDF inspection reports, and interact with a live AI assistant chatbot ("GuardBot").
+
+3. Context:
+In Indian rental markets (PGs, flats, and apartments), tenants routinely lose security deposits due to undocumented pre-existing damage, missing evidence, and verbal repair promises. DepositGuard serves both tenants and landlords by creating a neutral, timestamped digital record of property conditions and deposit settlements. It provides transparent documentation, not legal enforcement.
+
+4. Constraints:
+- Frontend: React (Vite) + Tailwind CSS with a clean, modern, mobile-responsive interface.
+- Backend: Python + FastAPI with clear REST endpoints and CORS configured for local dev and Vercel deployment.
+- Database, Auth & Storage: Supabase (separate Tenant and Landlord roles, PostgreSQL tables for properties, inspections, room_items, amendments, and settlements, plus Supabase Storage for room photos).
+- Signature Feature (Dual-Confirmation Lock): Once both Tenant and Landlord approve a move-in inspection, compute a SHA-256 hash of the finalized JSON payload and photo URLs on the backend, save the hash + timestamp, and lock the move-in record as read-only. Any later change must be appended as a separately timestamped amendment.
+- AI Integration (Official SDK): Use the official Python `google-genai` SDK (NOT the deprecated `google-generativeai` package) calling `gemini-4-hydrogen` for the GuardBot chatbot and before/after triage, and `gemini-3.5-flash-lite` for fast rough-note-to-JSON structuring. Load `GEMINI_API_KEY` strictly from backend `.env` variables—never expose keys in frontend code.
+- Mandatory Chatbot ("GuardBot"): Embed a floating/accessible chat widget connected live to a FastAPI endpoint -> Gemini API. It must help users with room inspection checklists, normal wear-and-tear vs. damage questions, and drafting neutral repair/settlement messages. It must validate empty/gibberish inputs, stay on-topic via system instructions, and display clean fallback error states if the API fails or times out. No hardcoded static replies.
+- Keep scope focused on a working end-to-end MVP without bloated enterprise boilerplate.
+
+5. Output Format:
+Deliver:
+1. Complete project directory structure (frontend + backend).
+2. Supabase SQL schema for all tables.
+3. Working React + Tailwind pages: Landing, Login/Register, Dashboard, Property & Move-In Inspection (with Dual-Confirmation Lock), Move-Out & Before/After Comparison, Settlement & PDF Export trigger, and the integrated GuardBot widget.
+4. Working FastAPI backend with Supabase integration, SHA-256 lock logic, Gemini API endpoints (GuardBot + structured damage analysis), and Python PDF report generation.
+5. `.env.example` files for both frontend and backend plus step-by-step local run commands.
+---
+Updated Context Snapshot
+Current Phase: Phase 1 – 15-Minute Pre-Build Prep (In Progress)
+
+Status:
+
+[ ] 1.1 Run 2 Perplexity AI queries → save to docs/research_notes.md
+
+[ ] 1.2 Run Claude/ChatGPT critique on v1 prompt → save v1 & v2 to docs/PROMPTS.md
+
+[ ] Phase 2 Next: Launch Antigravity with finalized v2 prompt & archive raw baseline output
+
+Go run those two quick steps and paste back (1) Perplexity's checklist/wear-and-tear highlights and (2) Claude/ChatGPT's critique + v2 prompt. I'll merge Perplexity's domain rules cleanly into your final prompt, update the tracker to Phase 2, and get you straight into Antigravity.
