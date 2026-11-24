@@ -44,7 +44,10 @@ export default function ComparisonPage({ propertyId, moveOutInspectionId, onNavi
           setComparisons(stored || []);
         }
       } catch (err) {
-        console.warn("Comparison load error:", err);
+        if (err.status === 401) {
+          onNavigate("auth", { initialMode: "login" });
+          return;
+        }
         setError(err.message || "Failed to load comparison data.");
       } finally {
         setLoading(false);

@@ -223,50 +223,28 @@ def verify_otp(req: VerifyOtpRequest, db: Session = Depends(get_db)):
 @router.post("/register", response_model=AuthTokenResponse, status_code=status.HTTP_201_CREATED)
 def register(req: UserRegisterRequest, db: Session = Depends(get_db)):
     """
-    Registers a new tenant or landlord.
-    Email OTP verification is removed - registration succeeds directly with email and password.
-    If the account already exists, updates password and returns active session.
+    Registers a new tenant or landlord directly with salted PBKDF2 password hashing.
+    No OTP roadblock required.
     """
     email_clean = req.email.lower()
 
-    # 1. If email already exists, update credentials and return active session immediately
+    # 1. Verify email uniqueness
     existing = db.query(ProfileModel).filter(ProfileModel.email == email_clean).first()
     if existing:
-        if req.password:
-            existing.password_hash = hash_password(req.password)
-        if req.full_name:
-            existing.full_name = req.full_name.strip()
-        if req.role:
-            existing.role = req.role
-        if req.phone:
-            existing.phone = req.phone.strip()
-        existing.email_verified = True
-        db.commit()
-        db.refresh(existing)
-
-        token = create_access_token(user_id=existing.id, email=existing.email, role=existing.role)
-        return AuthTokenResponse(
-            access_token=token,
-            token_type="bearer",
-            user=ProfileResponse(
-                id=existing.id,
-                email=existing.email,
-                full_name=existing.full_name,
-                phone=existing.phone,
-                role=existing.role,
-                created_at=existing.created_at
-            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account with this email address already exists. Please sign in."
         )
 
-    # 2. Create new profile directly with salted PBKDF2 hash without requiring OTP
+    # 2. Create profile with salted PBKDF2 hash directly
     user_id = str(uuid.uuid4())
     new_profile = ProfileModel(
         id=user_id,
         email=email_clean,
-        password_hash=hash_password(req.password or "password123"),
-        full_name=req.full_name.strip() if req.full_name else email_clean.split("@")[0].title(),
+        password_hash=hash_password(req.password),
+        full_name=req.full_name.strip(),
         phone=req.phone.strip() if req.phone else None,
-        role=req.role or "landlord",
+        role=req.role,
         email_verified=True
     )
     db.add(new_profile)
@@ -291,34 +269,14 @@ def register(req: UserRegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=AuthTokenResponse)
 def login(req: UserLoginRequest, db: Session = Depends(get_db)):
-    """Authenticates user with email and password."""
+    """Authenticates user with constant-time password verification."""
     email_clean = req.email.lower()
     profile = db.query(ProfileModel).filter(ProfileModel.email == email_clean).first()
 
-    # Auto-provision demo account if demo email is used
-    if not profile and email_clean == "thewayitgoes123456789@gmail.com":
-        profile = ProfileModel(
-            id=str(uuid.uuid4()),
-            email=email_clean,
-            full_name="Demo User",
-            password_hash=hash_password(req.password or "password123"),
-            role="landlord",
-            email_verified=True
-        )
-        db.add(profile)
-        db.commit()
-        db.refresh(profile)
-
-    if not profile:
+    if not profile or not verify_password(req.password, profile.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No account found with this email. Please register first."
-        )
-
-    if not verify_password(req.password, profile.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect password. Please verify your credentials."
+            detail="Invalid email or password."
         )
 
     token = create_access_token(user_id=profile.id, email=profile.email, role=profile.role)
@@ -340,22 +298,6 @@ def login(req: UserLoginRequest, db: Session = Depends(get_db)):
 @router.get("/me", response_model=ProfileResponse)
 def get_me(user: ProfileModel = Depends(get_current_user)):
     """Returns profile for currently authenticated user."""
-    return ProfileResponse(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        phone=user.phone,
-        role=user.role,
-        created_at=user.created_at
-    )
-
-
-@router.post("/toggle-role", response_model=ProfileResponse)
-def toggle_role(user: ProfileModel = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Toggles user role between landlord and tenant seamlessly."""
-    user.role = "tenant" if user.role == "landlord" else "landlord"
-    db.commit()
-    db.refresh(user)
     return ProfileResponse(
         id=user.id,
         email=user.email,

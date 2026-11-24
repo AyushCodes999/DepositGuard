@@ -271,7 +271,7 @@ const INSPECTION_SUITES_DATA = [
 ];
 
 export default function LandingPage({ onNavigate }) {
-  const { user, switchRole, logout } = useAuth();
+  const { user, logout } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -578,23 +578,19 @@ export default function LandingPage({ onNavigate }) {
           <nav className="flex items-center space-x-2 sm:space-x-3">
             {user ? (
               <>
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/10 border border-slate-900/15 backdrop-blur-sm">
+                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/10 border border-slate-900/15 backdrop-blur-sm">
                   <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
                   <span className="text-xs font-semibold text-slate-800 truncate max-w-[150px]">
-                    {user?.full_name || user?.email}
+                    {user.full_name || user.email}
                   </span>
-                  <button
-                    onClick={() => switchRole && switchRole()}
-                    title="Click to toggle between Landlord and Tenant"
-                    className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-full bg-slate-900/10 text-slate-800 hover:bg-slate-900/20 cursor-pointer transition"
-                  >
-                    {user?.role || "landlord"} ⇄
-                  </button>
+                  <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-full bg-slate-900/10 text-slate-800">
+                    {user.role}
+                  </span>
                 </div>
 
                 <button
                   onClick={() => onNavigate("dashboard")}
-                  className="text-xs sm:text-sm font-semibold px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm hover:shadow flex items-center gap-1.5 cursor-pointer"
+                  className="text-xs sm:text-sm font-semibold px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm hover:shadow flex items-center gap-1.5"
                 >
                   <span>Go to Dashboard</span>
                   <span>&rarr;</span>
@@ -612,13 +608,13 @@ export default function LandingPage({ onNavigate }) {
               <>
                 <button
                   onClick={() => onNavigate("auth", { initialMode: "login" })}
-                  className="text-xs sm:text-sm font-medium text-slate-700 hover:text-slate-950 px-3 py-1.5 transition cursor-pointer"
+                  className="text-xs sm:text-sm font-medium text-slate-700 hover:text-slate-950 px-3 py-1.5 transition"
                 >
                   Sign In
                 </button>
                 <button
                   onClick={() => onNavigate("auth", { initialMode: "register", initialRole: "tenant" })}
-                  className="text-xs sm:text-sm font-semibold px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm hover:shadow cursor-pointer"
+                  className="text-xs sm:text-sm font-semibold px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm hover:shadow"
                 >
                   Register
                 </button>
@@ -858,9 +854,6 @@ export default function LandingPage({ onNavigate }) {
                 <button
                   onClick={() => {
                     if (user?.role === "landlord") {
-                      onNavigate("dashboard");
-                    } else if (user) {
-                      switchRole && switchRole("landlord");
                       onNavigate("dashboard");
                     } else {
                       onNavigate("auth", { initialMode: "register", initialRole: "landlord" });

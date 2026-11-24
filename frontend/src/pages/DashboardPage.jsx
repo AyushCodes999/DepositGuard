@@ -83,7 +83,7 @@ export default function DashboardPage({ onNavigate, onSelectInspection, theme: p
     if (!user) {
       onNavigate("auth", { initialMode: "login" });
     }
-  }, [user, onNavigate]);
+  }, [user]);
 
   const fetchProperties = async () => {
     try {
@@ -98,7 +98,6 @@ export default function DashboardPage({ onNavigate, onSelectInspection, theme: p
         onNavigate("auth", { initialMode: "login" });
         return;
       }
-      console.warn("fetchProperties warning:", err);
       setError(err.message);
     } finally {
       setLoading(false);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
+import { api } from "../api/client";
 import BrandLogo from "../components/BrandLogo";
 import {
   Input,
@@ -23,7 +24,11 @@ import {
   Home,
   ArrowRight,
   AlertCircle,
+  CheckCircle2,
   Sparkles,
+  Mail,
+  KeyRound,
+  RefreshCw,
 } from "lucide-react";
 
 export default function AuthPage({
@@ -47,7 +52,6 @@ export default function AuthPage({
 
   useEffect(() => {
     setIsRegister(initialMode === "register");
-    setError("");
   }, [initialMode]);
 
   useEffect(() => {
@@ -60,29 +64,13 @@ export default function AuthPage({
     if (e) e.preventDefault();
     setError("");
 
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes("@")) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-
-    if (!password || password.length < 6) {
-      setError("Password must be at least 6 characters long.");
-      return;
-    }
-
-    if (isRegister && !fullName.trim()) {
-      setError("Please enter your full name.");
-      return;
-    }
-
     setLoading(true);
 
     try {
       if (isRegister) {
-        await register(cleanEmail, password, fullName.trim(), role, phone.trim());
+        await register(email, password, fullName, role, phone);
       } else {
-        await login(cleanEmail, password);
+        await login(email, password);
       }
       onNavigate("dashboard");
     } catch (err) {
@@ -98,8 +86,9 @@ export default function AuthPage({
     setError("");
   };
 
-  // DepositGuard Tenancy & Trust Icons orbiting the central brand lockup
+  // DepositGuard Tenancy & Trust Icons orbiting the central brand lockup (Rich Heritage Palette, 100% Non-Neon)
   const orbitIcons = [
+    // Inner orbit (radius 105): Statutory standard & Cryptographic hash seal
     {
       radius: 105,
       duration: 26,
@@ -125,6 +114,7 @@ export default function AuthPage({
         </div>
       ),
     },
+    // Middle orbit (radius 175): 5-Suite Condition baselines & Meter tracking & Dual Confirmation
     {
       radius: 175,
       duration: 34,
@@ -166,6 +156,7 @@ export default function AuthPage({
         </div>
       ),
     },
+    // Outer orbit (radius 245): GuardBot AI & Itemized Settlement PDF
     {
       radius: 245,
       duration: 44,
@@ -401,13 +392,14 @@ export default function AuthPage({
                 </div>
               )}
 
-              {/* Email Address - Clean and Direct without OTP barrier */}
+              {/* Email Address */}
               <div>
                 <BoxReveal boxColor={isDay ? "#C2B29F" : "#047857"} duration={0.3}>
-                  <Label htmlFor="email" className="text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1.5 block">
+                  <Label htmlFor="email" className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1.5">
                     Email Address <span className="text-emerald-600">*</span>
                   </Label>
                 </BoxReveal>
+
                 <BoxReveal width="100%" boxColor={isDay ? "#C2B29F" : "#047857"} duration={0.3}>
                   <Input
                     id="email"
@@ -519,6 +511,7 @@ export default function AuthPage({
                     onClick={() => {
                       setIsRegister(false);
                       setError("");
+                      handleResetEmail();
                     }}
                     className="font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-300 underline underline-offset-4 cursor-pointer transition ml-1"
                   >
@@ -533,6 +526,7 @@ export default function AuthPage({
                     onClick={() => {
                       setIsRegister(true);
                       setError("");
+                      handleResetEmail();
                     }}
                     className="font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-300 underline underline-offset-4 cursor-pointer transition ml-1"
                   >

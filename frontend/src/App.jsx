@@ -16,7 +16,8 @@ function AppContent() {
 
   const getInitialPage = () => {
     const path = window.location.pathname;
-    const hasToken = localStorage.getItem("depositguard_token");
+    const hasToken = !!localStorage.getItem("depositguard_token");
+
     if (path === "/login" || path === "/auth") return "auth";
     if (path.startsWith("/dashboard")) return hasToken ? "dashboard" : "auth";
     if (path.startsWith("/inspections")) return hasToken ? "inspection" : "auth";
@@ -78,12 +79,18 @@ function AppContent() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const navigateTo = (page, options = {}) => {
-    const hasToken = localStorage.getItem("depositguard_token");
-    const protectedPages = ["dashboard", "inspection", "comparison", "settlement"];
-    if (protectedPages.includes(page) && !hasToken) {
-      page = "auth";
+  // Route Guard: Protected routes require an active authenticated user
+  useEffect(() => {
+    const hasToken = !!localStorage.getItem("depositguard_token");
+    if (!loading && !user && !hasToken) {
+      const protectedPages = ["dashboard", "inspection", "comparison", "settlement"];
+      if (protectedPages.includes(currentPage)) {
+        navigateTo("auth", { initialMode: "login" });
+      }
     }
+  }, [user, loading, currentPage]);
+
+  const navigateTo = (page, options = {}) => {
     if (options.initialRole) {
       setAuthRole(options.initialRole);
     }
@@ -182,7 +189,7 @@ function AppContent() {
       )}
 
       {/* Global Navbar shown on authenticated / interior pages */}
-      {currentPage !== "landing" && currentPage !== "auth" && (
+      {currentPage !== "landing" && (
         <div className="relative z-20">
           <Navbar
             onNavigate={navigateTo}

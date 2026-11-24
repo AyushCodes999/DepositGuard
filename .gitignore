@@ -68,7 +68,6 @@ dist-ssr/
 *.swp
 *.swo
 
-# OS & Office lock files
+# OS
 .DS_Store
 Thumbs.db
-~$*

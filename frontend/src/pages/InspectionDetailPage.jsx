@@ -46,7 +46,10 @@ export default function InspectionDetailPage({ inspectionId, onNavigate, theme =
       const data = await api.getInspection(inspectionId);
       setInspection(data);
     } catch (err) {
-      console.warn("fetchInspection error:", err);
+      if (err.status === 401) {
+        onNavigate("auth", { initialMode: "login" });
+        return;
+      }
       setError(err.message || "Failed to load inspection record.");
     } finally {
       setLoading(false);
