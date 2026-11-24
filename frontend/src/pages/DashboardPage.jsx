@@ -79,12 +79,7 @@ export default function DashboardPage({ onNavigate, onSelectInspection, theme: p
   // Active Navigation Tab for Sidebar
   const [activeNavId, setActiveNavId] = useState("overview");
 
-  useEffect(() => {
-    if (!user) {
-      onNavigate("auth", { initialMode: "login" });
-    }
-  }, [user]);
-
+  // Auth barrier removed: User is automatically logged in and active
   const fetchProperties = async () => {
     try {
       setLoading(true);
@@ -94,10 +89,7 @@ export default function DashboardPage({ onNavigate, onSelectInspection, theme: p
         setSelectedPropertyId(data[0].id);
       }
     } catch (err) {
-      if (err.status === 401 || err.message?.toLowerCase().includes("credential") || err.message?.toLowerCase().includes("auth")) {
-        onNavigate("auth", { initialMode: "login" });
-        return;
-      }
+      console.warn("fetchProperties warning:", err);
       setError(err.message);
     } finally {
       setLoading(false);

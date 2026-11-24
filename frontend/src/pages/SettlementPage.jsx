@@ -51,11 +51,7 @@ export default function SettlementPage({ propertyId, onNavigate, theme = "night"
           }
         }
       } catch (err) {
-        if (err.status === 401) {
-          onNavigate("auth", { initialMode: "login" });
-          return;
-        }
-        console.error("Failed to load settlement data:", err);
+        console.warn("Settlement load error:", err);
       } finally {
         setLoading(false);
       }

@@ -41,16 +41,10 @@ async function request(endpoint, options = {}) {
     } catch (e) {
       errorDetail = await response.text();
     }
+    // Auth-free mode: Never purge local user session on unexpected status codes
     const err = new Error(errorDetail);
     err.status = response.status;
     err.errorCode = errorCode;
-
-    if (response.status === 401 && !endpoint.includes("/auth/login") && !endpoint.includes("/auth/register") && !endpoint.includes("/auth/verify-otp")) {
-      localStorage.removeItem("depositguard_token");
-      localStorage.removeItem("depositguard_user");
-      window.dispatchEvent(new Event("depositguard_auth_error"));
-    }
-
     throw err;
   }
 

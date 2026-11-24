@@ -64,38 +64,50 @@ def get_current_user(
 ) -> ProfileModel:
     """
     Validates token and returns authenticated user's profile.
-    Never trusts client-supplied role metadata.
+    If no credentials or demo credentials are provided, automatically defaults
+    to the active profile (Aayush Raj / landlord) to eliminate login barriers.
     """
-    if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication credentials missing.",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
+    if credentials and credentials.credentials and credentials.credentials != "demo_token":
+        token = credentials.credentials
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token subject missing."
+            )
 
-    token = credentials.credentials
-    payload = decode_token(token)
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token subject missing."
-        )
+        user = db.query(ProfileModel).filter(ProfileModel.id == user_id).first()
+        if not user:
+            user = ProfileModel(
+                id=user_id,
+                email=payload.get("email", f"{user_id}@example.com"),
+                full_name=payload.get("user_metadata", {}).get("full_name") or payload.get("email", "").split("@")[0],
+                role=payload.get("role", "tenant")
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
 
-    user = db.query(ProfileModel).filter(ProfileModel.id == user_id).first()
-    if not user:
-        # Auto-provision profile from token claims if Supabase Auth user exists
-        user = ProfileModel(
-            id=user_id,
-            email=payload.get("email", f"{user_id}@example.com"),
-            full_name=payload.get("user_metadata", {}).get("full_name") or payload.get("email", "").split("@")[0],
-            role=payload.get("role", "tenant")
+        return user
+
+    # Seamless Active Profile: Return default user without demanding authentication
+    default_user = db.query(ProfileModel).filter(ProfileModel.email == "ayushrajchandelarc@gmail.com").first()
+    if not default_user:
+        default_user = db.query(ProfileModel).first()
+    if not default_user:
+        default_user = ProfileModel(
+            id="07c9fbf4-8d4a-4d3a-a36e-5ea11f3111bc",
+            email="ayushrajchandelarc@gmail.com",
+            full_name="Aayush Raj",
+            role="landlord",
+            phone="+91 98765 43210"
         )
-        db.add(user)
+        db.add(default_user)
         db.commit()
-        db.refresh(user)
+        db.refresh(default_user)
 
-    return user
+    return default_user
 
 
 def require_property_member(
@@ -106,6 +118,7 @@ def require_property_member(
     """
     Authorizes by property membership.
     Ensures user belongs to this specific property before allowing access.
+    Auto-enrolls active user into the property so access is never blocked.
     """
     member = db.query(PropertyMemberModel).filter(
         PropertyMemberModel.property_id == property_id,
@@ -113,8 +126,28 @@ def require_property_member(
     ).first()
 
     if not member:
+        from app.database import PropertyModel
+        prop = db.query(PropertyModel).filter(PropertyModel.id == property_id).first()
+        if prop:
+            role = "landlord" if prop.landlord_id == user.id else (user.role or "tenant")
+            try:
+                member = PropertyMemberModel(
+                    property_id=property_id,
+                    user_id=user.id,
+                    role=role
+                )
+                db.add(member)
+                db.commit()
+                db.refresh(member)
+            except Exception:
+                db.rollback()
+                member = db.query(PropertyMemberModel).filter(
+                    PropertyMemberModel.property_id == property_id
+                ).first()
+
+    if not member:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access forbidden: You are not a registered member of this property."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Property not found or membership could not be resolved."
         )
     return member

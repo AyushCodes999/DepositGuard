@@ -16,13 +16,10 @@ function AppContent() {
 
   const getInitialPage = () => {
     const path = window.location.pathname;
-    const hasToken = !!localStorage.getItem("depositguard_token");
-
-    if (path === "/login" || path === "/auth") return "auth";
-    if (path.startsWith("/dashboard")) return hasToken ? "dashboard" : "auth";
-    if (path.startsWith("/inspections")) return hasToken ? "inspection" : "auth";
-    if (path.startsWith("/comparison")) return hasToken ? "comparison" : "auth";
-    if (path.startsWith("/settlement")) return hasToken ? "settlement" : "auth";
+    if (path.startsWith("/dashboard") || path === "/login" || path === "/auth") return "dashboard";
+    if (path.startsWith("/inspections")) return "inspection";
+    if (path.startsWith("/comparison")) return "comparison";
+    if (path.startsWith("/settlement")) return "settlement";
     return "landing";
   };
 
@@ -79,18 +76,11 @@ function AppContent() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  // Route Guard: Protected routes require an active authenticated user
-  useEffect(() => {
-    const hasToken = !!localStorage.getItem("depositguard_token");
-    if (!loading && !user && !hasToken) {
-      const protectedPages = ["dashboard", "inspection", "comparison", "settlement"];
-      if (protectedPages.includes(currentPage)) {
-        navigateTo("auth", { initialMode: "login" });
-      }
-    }
-  }, [user, loading, currentPage]);
-
   const navigateTo = (page, options = {}) => {
+    // Auth barriers removed: redirect any auth requests directly to dashboard
+    if (page === "auth" || page === "login") {
+      page = "dashboard";
+    }
     if (options.initialRole) {
       setAuthRole(options.initialRole);
     }

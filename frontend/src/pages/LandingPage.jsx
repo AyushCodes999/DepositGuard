@@ -271,7 +271,7 @@ const INSPECTION_SUITES_DATA = [
 ];
 
 export default function LandingPage({ onNavigate }) {
-  const { user, logout } = useAuth();
+  const { user, switchRole } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -576,50 +576,27 @@ export default function LandingPage({ onNavigate }) {
 
           {/* Right Navigation */}
           <nav className="flex items-center space-x-2 sm:space-x-3">
-            {user ? (
-              <>
-                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/10 border border-slate-900/15 backdrop-blur-sm">
-                  <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
-                  <span className="text-xs font-semibold text-slate-800 truncate max-w-[150px]">
-                    {user.full_name || user.email}
-                  </span>
-                  <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-full bg-slate-900/10 text-slate-800">
-                    {user.role}
-                  </span>
-                </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/10 border border-slate-900/15 backdrop-blur-sm">
+              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+              <span className="text-xs font-semibold text-slate-800 truncate max-w-[150px]">
+                {user?.full_name || user?.email || "Aayush Raj"}
+              </span>
+              <button
+                onClick={() => switchRole && switchRole()}
+                title="Click to toggle between Landlord and Tenant"
+                className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-full bg-slate-900/10 text-slate-800 hover:bg-slate-900/20 cursor-pointer transition"
+              >
+                {user?.role || "landlord"} ⇄
+              </button>
+            </div>
 
-                <button
-                  onClick={() => onNavigate("dashboard")}
-                  className="text-xs sm:text-sm font-semibold px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm hover:shadow flex items-center gap-1.5"
-                >
-                  <span>Go to Dashboard</span>
-                  <span>&rarr;</span>
-                </button>
-
-                <button
-                  onClick={handleLogout}
-                  className="text-xs sm:text-sm font-medium text-slate-700 hover:text-rose-700 px-2.5 py-1.5 transition cursor-pointer"
-                  title="Sign out of your account"
-                >
-                  Log Out
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => onNavigate("auth", { initialMode: "login" })}
-                  className="text-xs sm:text-sm font-medium text-slate-700 hover:text-slate-950 px-3 py-1.5 transition"
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => onNavigate("auth", { initialMode: "register", initialRole: "tenant" })}
-                  className="text-xs sm:text-sm font-semibold px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm hover:shadow"
-                >
-                  Register
-                </button>
-              </>
-            )}
+            <button
+              onClick={() => onNavigate("dashboard")}
+              className="text-xs sm:text-sm font-semibold px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm hover:shadow flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>Go to Dashboard</span>
+              <span>&rarr;</span>
+            </button>
           </nav>
         </header>
 
@@ -852,13 +829,7 @@ export default function LandingPage({ onNavigate }) {
               {/* Landlord Quick CTA & User Property Indicator */}
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                 <button
-                  onClick={() => {
-                    if (user?.role === "landlord") {
-                      onNavigate("dashboard");
-                    } else {
-                      onNavigate("auth", { initialMode: "register", initialRole: "landlord" });
-                    }
-                  }}
+                  onClick={() => onNavigate("dashboard")}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm transition shadow-md shadow-slate-900/10 cursor-pointer"
                 >
                   <span>+</span>
@@ -1170,11 +1141,7 @@ export default function LandingPage({ onNavigate }) {
                               if (p.invite_code) {
                                 handleCopyInvite(p.invite_code);
                               }
-                              if (user) {
-                                onNavigate("dashboard");
-                              } else {
-                                onNavigate("auth", { initialMode: "register", initialRole: "tenant" });
-                              }
+                              onNavigate("dashboard");
                             }}
                             className="flex-1 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition text-center shadow-md shadow-slate-900/10 cursor-pointer"
                           >
@@ -1587,15 +1554,11 @@ export default function LandingPage({ onNavigate }) {
               <button
                 onClick={() => {
                   setSelectedPropertyModal(null);
-                  if (user) {
-                    onNavigate("dashboard");
-                  } else {
-                    onNavigate("auth", { initialMode: "register", initialRole: "tenant" });
-                  }
+                  onNavigate("dashboard");
                 }}
                 className="flex-1 py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition text-center shadow-md shadow-slate-900/10 cursor-pointer"
               >
-                {user ? "Open in Dashboard & Inspect" : "Register to Inspect Property"}
+                Open in Dashboard & Inspect
               </button>
             </div>
           </div>

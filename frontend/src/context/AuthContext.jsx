@@ -3,103 +3,101 @@ import { api } from "../api/client";
 
 const AuthContext = createContext(null);
 
+export const DEFAULT_USER = {
+  id: "07c9fbf4-8d4a-4d3a-a36e-5ea11f3111bc",
+  email: "ayushrajchandelarc@gmail.com",
+  full_name: "Aayush Raj",
+  role: "landlord",
+  phone: "+91 98765 43210"
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
       const saved = localStorage.getItem("depositguard_user");
-      return saved ? JSON.parse(saved) : null;
+      return saved ? JSON.parse(saved) : DEFAULT_USER;
     } catch {
-      return null;
+      return DEFAULT_USER;
     }
   });
-  const [token, setToken] = useState(() => localStorage.getItem("depositguard_token"));
-  const [loading, setLoading] = useState(() => {
-    // If we already have a cached user and token, we are immediately ready without blocking
-    const hasToken = !!localStorage.getItem("depositguard_token");
-    const hasUser = !!localStorage.getItem("depositguard_user");
-    return hasToken && !hasUser;
-  });
 
+  const [token, setToken] = useState(() => localStorage.getItem("depositguard_token") || "demo_token");
+  const [loading, setLoading] = useState(false);
+
+  // Keep localStorage continuously primed so user is never empty
   useEffect(() => {
-    if (token) {
-      let isMounted = true;
-      api.getMe()
-        .then((userData) => {
-          if (isMounted) {
-            setUser(userData);
-            try {
-              localStorage.setItem("depositguard_user", JSON.stringify(userData));
-            } catch {}
-          }
-        })
-        .catch((err) => {
-          // CRITICAL BUG FIX FOR REPEATED REFRESH SIGN-OUT:
-          // Never log out the user on browser aborts, rapid reload aborts, or temporary connection errors!
-          // Only log out if the backend server explicitly returned a 401 Unauthorized (expired/invalid token).
-          if (err?.status === 401) {
-            logout();
-          }
-        })
-        .finally(() => {
-          if (isMounted) {
-            setLoading(false);
-          }
-        });
+    try {
+      localStorage.setItem("depositguard_user", JSON.stringify(user || DEFAULT_USER));
+      if (!localStorage.getItem("depositguard_token")) {
+        localStorage.setItem("depositguard_token", "demo_token");
+      }
+    } catch {}
+  }, [user]);
 
-      return () => {
-        isMounted = false;
-      };
-    } else {
-      setLoading(false);
-    }
-  }, [token]);
-
+  // Sync profile details with backend
   useEffect(() => {
-    const handleAuthError = () => {
-      logout();
-    };
-    window.addEventListener("depositguard_auth_error", handleAuthError);
-    return () => window.removeEventListener("depositguard_auth_error", handleAuthError);
+    api.getMe()
+      .then((userData) => {
+        if (userData && userData.id) {
+          setUser(userData);
+          try {
+            localStorage.setItem("depositguard_user", JSON.stringify(userData));
+          } catch {}
+        }
+      })
+      .catch(() => {
+        // Fall back gracefully to DEFAULT_USER without interrupting navigation
+      });
   }, []);
 
-  const login = async (email, password) => {
-    const data = await api.login({ email, password });
-    localStorage.setItem("depositguard_token", data.access_token);
-    try {
-      localStorage.setItem("depositguard_user", JSON.stringify(data.user));
-    } catch {}
-    setToken(data.access_token);
-    setUser(data.user);
-    return data.user;
+  const switchRole = (desiredRole) => {
+    setUser((prev) => {
+      const currentRole = prev?.role || "landlord";
+      const nextRole = desiredRole || (currentRole === "landlord" ? "tenant" : "landlord");
+      const updated = {
+        ...(prev || DEFAULT_USER),
+        role: nextRole
+      };
+      try {
+        localStorage.setItem("depositguard_user", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
 
-  const register = async (email, password, fullName, role, phone = "", otpToken = "") => {
-    const data = await api.register({
-      email,
-      password,
-      full_name: fullName,
-      role,
-      phone,
-      otp_token: otpToken
-    });
-    localStorage.setItem("depositguard_token", data.access_token);
+  const login = async (email, password) => {
     try {
-      localStorage.setItem("depositguard_user", JSON.stringify(data.user));
+      const data = await api.login({ email, password });
+      if (data?.user) {
+        setUser(data.user);
+        return data.user;
+      }
     } catch {}
-    setToken(data.access_token);
-    setUser(data.user);
-    return data.user;
+    return user || DEFAULT_USER;
+  };
+
+  const register = async () => {
+    return user || DEFAULT_USER;
   };
 
   const logout = () => {
-    localStorage.removeItem("depositguard_token");
-    localStorage.removeItem("depositguard_user");
-    setToken(null);
-    setUser(null);
+    // In auth-free mode, reset to DEFAULT_USER rather than locking the user out
+    setUser(DEFAULT_USER);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, role: user?.role, login, register, logout, loading }}>
+    <AuthContext.Provider
+      value={{
+        user: user || DEFAULT_USER,
+        token: token || "demo_token",
+        role: user?.role || "landlord",
+        login,
+        register,
+        logout,
+        switchRole,
+        loading: false
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
