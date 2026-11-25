@@ -13,10 +13,14 @@ start "DepositGuard Backend" cmd /k "cd /d "%~dp0backend" && if exist .venv\Scri
 echo [2/3] Starting Frontend (Vite + React) on http://localhost:5173 ...
 start "DepositGuard Frontend" cmd /k "cd /d "%~dp0frontend" && npm run dev"
 
-echo [3/3] Waiting for servers to initialize...
-timeout /t 3 /nobreak >nul
+echo [3/3] Waiting for Backend to be ready...
+:wait_loop
+timeout /t 1 /nobreak >nul
+curl -s http://localhost:8000/health >nul 2>&1
+if errorlevel 1 goto wait_loop
 
-echo Opening browser at http://localhost:5173 ...
+echo Backend is online! Opening browser at http://localhost:5173 ...
+timeout /t 1 /nobreak >nul
 start http://localhost:5173
 
 echo.
